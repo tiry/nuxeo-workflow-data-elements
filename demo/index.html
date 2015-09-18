@@ -49,33 +49,164 @@ Contributors:
 <body unresolved>
 <template is="dom-bind">
 
-  <nx-connection url="http://192.168.1.8:8080/nuxeo" username="Administrator" password="Administrator"></nx-connection>
+  <nx-connection url="http://127.0.0.1:8080/nuxeo" username="Administrator" password="Administrator"></nx-connection>
 
   <input type="date" value="{{startDate::change}}">
   <input type="date" value="{{endDate::change}}">
 
-  <h2>Avg Workflow duration per department (#1)</h2>
+  <h2>Number of calls per PageProvider (#1)</h2>
 
-  <nuxeo-workflow-metrics workflow="TravelExpenseValidation"
-                          grouped-by="variables.department"
-                          metrics="avg(duration)"
+  <nuxeo-workflow-metrics 
+                          grouped-by="pageProviderName"
+                          data="{{ppCalls}}"
+                          index="audit"
+                          event="search"
                           start-date="[[startDate]]" end-date="[[endDate]]"
-                          data="{{durations}}">
+                          >
   </nuxeo-workflow-metrics>
 
   <table>
     <tr>
-      <th>Department</th>
-      <th>Avg. Duration</th>
+      <th>Pageprovider</th>
+      <th>Number of calls</th>
     </tr>
-    <template is="dom-repeat" items="[[durations]]" as="entry">
+    <template is="dom-repeat" items="[[ppCalls]]" as="entry">
       <tr>
         <td>[[entry.key]]</td>
-        <td>[[formatDuration(entry.value)]]</td>
+        <td>[[entry.value]]</td>
       </tr>
     </template>
   </table>
 
+
+ <h2>Number of calls per hour (#2)</h2>
+
+  <nuxeo-workflow-metrics 
+                          data="{{callPerHour}}"
+                          index="audit"
+                          event="search"
+                          start-date="[[startDate]]" end-date="[[endDate]]"
+                          with-date-intervals="hour"
+                          time-format="HH"
+                          field="eventDate"
+                          XXhistogram-script="doc['eventDate'].date.getHourOfDay()"
+                          >
+  </nuxeo-workflow-metrics>
+
+  <table>
+    <tr>
+      <th>Hour</th>
+      <th>Number of calls</th>
+    </tr>
+    <template is="dom-repeat" items="[[callPerHour]]" as="entry">
+      <tr>
+        <td>[[entry.key]]</td>
+        <td>[[entry.value]]</td>
+      </tr>
+    </template>
+  </table>
+
+
+ <h2>Result of searches by range of number of result (#3)</h2>
+
+  <nuxeo-workflow-metrics 
+                          data="{{callPerNumberOfResults}}"
+                          index="audit"
+                          event="search"
+                          start-date="[[startDate]]" end-date="[[endDate]]"
+                          with-ranges='{"resultsCount":[{"key": "no result", "to": 0 },{"key": "less than 50", "from" : 1, "to": 50},{"key": "between 51 and 200", "from" : 51, "to": 200 },{"key": "between 200 and 1000", "from" : 201, "to": 1000},{"key": "more than 1000", "from" : 1001 }]}'
+                          >
+  </nuxeo-workflow-metrics>
+
+  <table>
+    <tr>
+      <th>Number of results </th>
+      <th>Number of calls</th>
+    </tr>
+    <template is="dom-repeat" items="[[callPerNumberOfResults]]" as="entry">
+      <tr>
+        <td>[[entry.key]]</td>
+        <td>[[entry.value]]</td>
+      </tr>
+    </template>
+  </table>
+
+
+<h2>Most used expressions for full text search  (#4)</h2>
+
+  <nuxeo-workflow-metrics 
+                          data="{{callPerFT}}"
+                          index="audit"
+                          event="search"
+                          start-date="[[startDate]]" end-date="[[endDate]]"
+                          grouped-by="searchDocumentModel.properties.defaults:ecm_fulltext"
+                          >
+  </nuxeo-workflow-metrics>
+
+  <table>
+    <tr>
+      <th>Search term</th>
+      <th>Number of calls</th>
+    </tr>
+    <template is="dom-repeat" items="[[callPerFT]]" as="entry">
+      <tr>
+        <td>[[entry.key]]</td>
+        <td>[[entry.value]]</td>
+      </tr>
+    </template>
+  </table>
+
+
+<h2>Searches by number of pages displayed (#5)</h2>
+
+  <nuxeo-workflow-metrics 
+                          data="{{callPerNumberOfPages}}"
+                          index="audit"
+                          event="search"
+                          start-date="[[startDate]]" end-date="[[endDate]]"
+                          with-ranges='{"pageIndex":[{"key": "First page", "from" : 0, "to": 1 },{"key": "Page 2", "from" : 1, "to": 2},{"key": "Pages 3 to 5", "from" : 2, "to": 5 },{"key": "Pages 6 to 10", "from" : 6, "to": 10},{"key": "After 10 pages", "from" : 10 }]}'
+                          >
+  </nuxeo-workflow-metrics>
+
+  <table>
+    <tr>
+      <th>Number of Pages </th>
+      <th>Number of calls</th>
+    </tr>
+    <template is="dom-repeat" items="[[callPerNumberOfPages]]" as="entry">
+      <tr>
+        <td>[[entry.key]]</td>
+        <td>[[entry.value]]</td>
+      </tr>
+    </template>
+  </table>
+
+
+<h2>Searches by filters used (#6)</h2>
+
+  <nuxeo-workflow-metrics 
+                          data="{{callByFilters}}"
+                          index="audit"
+                          event="search"
+                          start-date="[[startDate]]" end-date="[[endDate]]"
+                          grouped-by="searchFields"
+                          >
+  </nuxeo-workflow-metrics>
+
+  <table>
+    <tr>
+      <th>Filters used </th>
+      <th>Number of calls</th>
+    </tr>
+    <template is="dom-repeat" items="[[callByFilters]]" as="entry">
+      <tr>
+        <td>[[entry.key]]</td>
+        <td>[[entry.value]]</td>
+      </tr>
+    </template>
+  </table>
+
+<!--
   <h2>Workflow instance count per amount (#2)</h2>
 
   <nuxeo-workflow-metrics workflow="TravelExpenseValidation"
@@ -247,13 +378,13 @@ Contributors:
       </tr>
     </template>
   </table>
-
+-->
 </template>
 <script>
   var t = document.querySelector('template');
 
   t.startDate = "2015-08-16";
-  t.endDate = "2015-08-20";
+  t.endDate = "2015-09-20";
 
   t.formatDuration = function (duration) {
     var seconds = Math.floor(duration/1000),

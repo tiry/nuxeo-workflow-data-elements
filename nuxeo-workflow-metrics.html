@@ -83,43 +83,30 @@ If all the aggregation levels are configured it will produce a query like:
        * Top level term aggregation(s).
        * Comma-separated values..
        */
-      groupedBy: {
-        type: String,
-        value: ''
-      },
+      groupedBy: String,
 
       /**
        * An object with the field as key and an array of ranges to use in the nested range aggregation as value.
        */
-      withRanges: {
-        type: Object,
-        value: function () { return {}; }
-      },
+      withRanges: Object,
 
       /**
        * Interval to use for the nested date histogram aggregation
        */
-      withDateIntervals: {
-        type: String,
-        value: ''
-      },
+      withDateIntervals: String,
 
       /**
-       * Date format to use as key in the date intervals aggregates
-       **/
-      dateFormat: {
-        type: String,
-        value: 'yyyy-MM-dd'
-      },
+      * define the time format used for date based historgrams
+      */
+      timeFormat: String,
+
+      histogramScript: String,
 
       /**
        * The field to use in the single-value metrics aggregation.
        * This can be just the field name or include the `metrics-op` to use as well, ex: `avg(field)`
        */
-      metrics: {
-        type: String,
-        value: ''
-      },
+      metrics: String,
 
       /**
        * The single-value metrics aggregation to use.
@@ -131,22 +118,16 @@ If all the aggregation levels are configured it will produce a query like:
         value: 'count'
       },
 
-      startDate: {
-        type: String,
-        value: ''
-      },
+      startDate: String,
 
-      endDate: {
-        type: String,
-        value: ''
-      }
+      endDate: String
 
     },
 
     observers: [
       '_doFetch(index, query, aggregates)',
       '_query(workflow, startDate, endDate)',
-      '_aggregates(groupedBy, withRanges, withDateIntervals, metrics, metricsOperator, startDate, endDate)'
+      '_aggregates(groupedBy, withRanges, withDateIntervals, metrics, metricsOperator, startDate, endDate, timeFormat)'
     ],
 
     ready: function() {
@@ -159,13 +140,16 @@ If all the aggregation levels are configured it will produce a query like:
       this.debounce('do-fetch', this.fetch.bind(this));
     },
 
-    _query: function() {
+    _query: function () {
       var event = this.event || (this.task ? 'afterWorkflowTaskEnded' : 'afterWorkflowFinish');
 
       var terms = [
-        {term: {"eventId": event}},
-        {term: {"extended.modelName": this.workflow}}
+        {term: {"eventId": event}}        
       ];
+
+      if (this.workflow) {
+        terms.push({term: {"extended.modelName": this.workflow}});
+      }
 
       if (this.task) {
         terms.push({term: { 'extended.taskName': this.task}});
@@ -210,30 +194,39 @@ If all the aggregation levels are configured it will produce a query like:
     },
 
     get _nestedAggregation() {
+      var tFormat = this.timeFormat;
+      if (!tFormat) { // XXX : define default !
+        tFormat = "yyyy-MM-dd";
+      }
       if (this.withDateIntervals) {
-        var histogram = {
-          field: "eventDate",
+        var histogram = {          
           interval: this.withDateIntervals,
-          min_doc_count: 0,
-          format: this.dateFormat
-        };
+          min_doc_count: 1,          
+        };        
+        if (this.histogramScript) {
+            histogram.script = this.histogramScript;
+        } else {
+            histogram.field = "eventDate";
+            histogram.format = tFormat;
+        }
         if (this.startDate && this.endDate) {
-          histogram.extended_bounds = {
-            min: this.startDate,
-            max: this.endDate
-          };
+          if (this.withDateIntervals != "hour" && !this.histogramScript ) { // XXX : hack to make hour historgram work
+            histogram.extended_bounds = {
+              min: this.startDate,
+              max: this.endDate
+            };
+          }
         } else {
           console.warn('A start and end date should be set when using date aggregation');
         }
         return {
           by: {
-            date_histogram: histogram
+           date_histogram: histogram
           }
         };
       }
-
-      var key = Object.keys(this.withRanges)[0];
-      if (key) {
+      if (this.withRanges) {
+        var key = Object.keys(this.withRanges)[0];
         return {
           by: {
             range: {
@@ -281,7 +274,8 @@ If all the aggregation levels are configured it will produce a query like:
     },
 
     _onResults: function (result) {
-      this.data = this._unwrapAggregation(result.aggregations);
+      // unwrap our aggregates
+      this.data = result.aggregations.by.buckets.map(this._unwrapAggregation.bind(this));
     },
 
     _unwrapAggregation: function (bucket) {
@@ -292,7 +286,7 @@ If all the aggregation levels are configured it will produce a query like:
       } else {
         value = this._getMetricsValue(bucket);
       }
-      return key ? {key: key, value: value} : value;
+      return {key: key, value: value};
     },
 
     // unwrap out metrics value
